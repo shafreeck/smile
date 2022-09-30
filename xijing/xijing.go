@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/shafreeck/smile-upload/unwrap"
+	"github.com/shafreeck/miao/unwrap"
 )
 
 type Client struct {
@@ -63,7 +63,7 @@ func (c *Client) Download(id string) []string {
 		data := unwrap.Err(io.ReadAll(resp.Body))
 
 		// add the id as part of the name
-		name = id + "-" + name
+		name = "bgm/" + id + "-" + name
 		file := unwrap.Err(os.OpenFile(name, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644))
 		unwrap.Err(file.Write(data))
 		resp.Body.Close()

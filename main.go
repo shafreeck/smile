@@ -8,9 +8,9 @@ import (
 	"path"
 
 	"github.com/shafreeck/cortana"
-	"github.com/shafreeck/smile-upload/saes"
-	"github.com/shafreeck/smile-upload/smile"
-	"github.com/shafreeck/smile-upload/xijing"
+	"github.com/shafreeck/miao/saes"
+	"github.com/shafreeck/miao/smile"
+	"github.com/shafreeck/miao/xijing"
 )
 
 func smileDecodeCommand() {
@@ -100,9 +100,26 @@ func downloadAndUploadCommand() {
 		IDs []string `cortana:"id, -, -"`
 	}{}
 	cortana.Parse(&args)
+
+	fmt.Println("从戏鲸下载 ", args.IDs)
+	var names []string
+	xi := xijing.New("3bb8bf1e84b863a2de3a24bc24652b31", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9hcGkuYWlwaWF4aS5jb21cL3dlY2hhdFwvbG9naW5RUmNvZGVcLzRiMmNkZjQ2YThiMDU0NTM2MzJiMjdjNWQ4YzYyMWY5IiwiaWF0IjoxNjYzNTk5MDQxLCJleHAiOjE3MjU4MDcwNDEsIm5iZiI6MTY2MzU5OTA0MSwianRpIjoiR01COW5FemN0cjlJcXI2SiIsInN1YiI6IjY5MTMyNzEiLCJwcnYiOiIzNmIzM2RmOWM0YTRiYjU4ZDVlNzBhYWY5Y2M3NDIyMjFmYTg2ZTNiIn0.wXv7RfHSVj-zHmu7pmVzVUx7om2U6PQM8JFGr0eARJ8")
+	for _, id := range args.IDs {
+		names = append(names, xi.Download(id)...)
+	}
+
+	fmt.Println("上传四喵")
+	sm := smile.New()
+	for _, name := range names {
+		url, size := sm.UploadOSS(name)
+		sm.CreateSongShare(path.Base(name), "佚名", url, size)
+		fmt.Println("上传：", name)
+	}
+	fmt.Println("上传完成")
 }
 
 func main() {
+	cortana.AddRootCommand(downloadAndUploadCommand)
 	cortana.AddCommand("download", xijingDownloadCommand, "从戏鲸下载BGM")
 	cortana.AddCommand("decode", smileDecodeCommand, "解码四喵密文")
 	cortana.AddCommand("sms", smileSendSMSCommand, "发送短信验证码")

@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/shafreeck/smile-upload/saes"
-	"github.com/shafreeck/smile-upload/unwrap"
+	"github.com/shafreeck/miao/saes"
+	"github.com/shafreeck/miao/unwrap"
 )
 
 const Endpoint = "http://www.smilemiao.com"
@@ -47,6 +47,7 @@ func (c *Client) httpGet(path string) *http.Response {
 	req := unwrap.Err(http.NewRequest(http.MethodGet, url, nil))
 	req.Header.Add("platform", PlatformHeader)
 	req.Header.Add("token", c.token)
+	req.Header.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53")
 	return unwrap.Err(http.DefaultClient.Do(req))
 }
 func (c *Client) httpPost(path string, payload []byte) *http.Response {
@@ -57,6 +58,7 @@ func (c *Client) httpPost(path string, payload []byte) *http.Response {
 	url := c.url(path)
 	req := unwrap.Err(http.NewRequest(http.MethodPost, url, bytes.NewReader(unwrap.Err(json.Marshal(params)))))
 	req.Header.Add("platform", PlatformHeader)
+	req.Header.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53")
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("token", c.token)
 	return unwrap.Err(http.DefaultClient.Do(req))

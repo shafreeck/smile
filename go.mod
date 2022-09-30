@@ -1,4 +1,4 @@
-module github.com/shafreeck/smile-upload
+module github.com/shafreeck/miao
 
 go 1.19
 
