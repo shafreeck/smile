@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"path"
+	"strings"
 
 	"github.com/shafreeck/cortana"
 	"github.com/shafreeck/miao/saes"
@@ -112,7 +113,7 @@ func downloadAndUploadCommand() {
 	sm := smile.New()
 	for _, name := range names {
 		url, size := sm.UploadOSS(name)
-		sm.CreateSongShare(path.Base(name), "佚名", url, size)
+		sm.CreateSongShare(strings.Trim(path.Base(name), ".mp3"), "佚名", url, size)
 		fmt.Println("上传：", name)
 	}
 	fmt.Println("上传完成")
