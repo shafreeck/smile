@@ -74,12 +74,14 @@ func (c *Client) SendSMSCode(phone string) {
 
 	ok := struct {
 		Code    int    `json:"code"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
 		Message string `json:"message"`
 	}{}
 
 	unwrap.Must(json.Unmarshal(plain, &ok))
 	if ok.Code != 200 {
-		log.Fatal("get sms code failed, check your phone number please")
+		log.Fatal("get sms code failed, check your phone number please", ok)
 	}
 }
 
@@ -98,6 +100,8 @@ func (c *Client) Login(phone, smscode string) {
 
 	ok := struct {
 		Code    int    `json:"code"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
 		Message string `json:"message"`
 		Data    string `json:"data"`
 	}{}
@@ -106,7 +110,7 @@ func (c *Client) Login(phone, smscode string) {
 	unwrap.Must(json.Unmarshal(saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data)))), &ok))
 
 	if ok.Code != 200 {
-		log.Fatal("login failed: ", ok.Message)
+		log.Fatal("login failed: ", ok)
 	}
 
 	fmt.Println("get the auth token: ", ok.Data)
@@ -123,6 +127,8 @@ func (c *Client) UploadOSS(path string) (string, int64) {
 	ok := struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
 		Data    struct {
 			SecurityToken   string `json:"securityToken"`
 			AccessKeySecret string `json:"accessKeySecret"`
@@ -132,7 +138,7 @@ func (c *Client) UploadOSS(path string) (string, int64) {
 	data := unwrap.Err(io.ReadAll(resp.Body))
 	unwrap.Must(json.Unmarshal(saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data)))), &ok))
 	if ok.Code != 200 {
-		log.Fatal("get oss token failed: ", ok.Message)
+		log.Fatal("get oss token failed: ", ok)
 	}
 
 	endpoint := "https://oss-cn-beijing.aliyuncs.com"
@@ -150,6 +156,13 @@ func (c *Client) UploadOSS(path string) (string, int64) {
 }
 
 func (c *Client) CreateSongShare(name, singer, url string, size int64) {
+	// should be less than 30 bytes for the name
+	shortize := func(name string) string {
+		if len(name) > 30 {
+			name = name[:30]
+		}
+		return name
+	}
 	params := struct {
 		Name   string `json:"name"`
 		Singer string `json:"singer"`
@@ -157,10 +170,10 @@ func (c *Client) CreateSongShare(name, singer, url string, size int64) {
 		Type   int    `json:"type"`
 		Size   int64  `json:"size"`
 	}{
-		Name:   name,
+		Name:   shortize(name),
 		Singer: singer,
 		Url:    url,
-		Type:   2,
+		Type:   1,
 		Size:   size,
 	}
 
@@ -172,12 +185,77 @@ func (c *Client) CreateSongShare(name, singer, url string, size int64) {
 
 	ok := struct {
 		Code    int    `json:"code"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
 		Message string `json:"message"`
 	}{}
 	data := unwrap.Err(io.ReadAll(resp.Body))
 	unwrap.Must(json.Unmarshal(saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data)))), &ok))
 
 	if ok.Code != 200 {
-		log.Fatal("create song share failed: ", ok.Message)
+		log.Fatal("create song share failed: ", ok)
 	}
+
+	// add uploaded file to log
+	uplog := unwrap.Err(os.OpenFile("smile-upload.log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644))
+	unwrap.Err(uplog.WriteString(name))
+	unwrap.Err(uplog.WriteString("\n"))
+}
+
+type SongEntry struct {
+	Deleted    int    `json:"deleted"`
+	CreateTime int    `json:"createTime"`
+	UpdateTime int    `json:"updateTime"`
+	ID         int    `json:"id"`
+	Code       int    `json:"code"`
+	Name       string `json:"name"`
+	Singer     string `json:"singer"`
+	Poster     string `json:"poster"`
+	URL        string `json:"url"`
+	LyricURL   string `json:"lyricUrl"`
+	Type       int    `json:"type"`
+	Size       int    `json:"size"`
+	UpUID      int    `json:"upuid"`
+	PlayCount  int    `json:"playCount"`
+	AddCount   int    `json:"addCount"`
+	UpNick     string `json:"upnick"`
+}
+
+func (c *Client) ListSongs() []SongEntry {
+	type OK struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
+		Data    struct {
+			Content       []SongEntry `json:"content"`
+			Last          bool        `json:"last"`
+			TotalPages    int         `json:"totalPages"`
+			TotalElements int         `json:"totalElements"`
+			NumOfElements int         `json:"numberOfElements"`
+		} `json:"data"`
+	}
+	var songs []SongEntry
+	p := 1
+	for {
+		resp := c.httpGet(fmt.Sprintf("community/songs/users?pageNo=%d&pageSize=100", p))
+		data := unwrap.Err(io.ReadAll(resp.Body))
+		resp.Body.Close()
+		plain := saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data))))
+
+		ok := OK{}
+		unwrap.Must(json.Unmarshal(plain, &ok))
+
+		if ok.Code != 200 {
+			log.Fatal(ok.Message)
+		}
+
+		songs = append(songs, ok.Data.Content...)
+
+		if ok.Data.Last {
+			break
+		}
+		p++
+	}
+	return songs
 }

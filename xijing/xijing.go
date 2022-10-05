@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path"
+	"strings"
 
 	"github.com/shafreeck/miao/unwrap"
 )
@@ -72,4 +75,29 @@ func (c *Client) Download(id string) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// translate to mp3 when necessary
+func MP3Codec(names []string) []string {
+
+	var targets []string
+	for _, name := range names {
+		ext := path.Ext(name)
+		if ext == ".mp3" {
+			targets = append(targets, name)
+			continue
+		}
+		fmt.Println("转码 MP3: ", name)
+		bare := strings.TrimRight(name, ext)
+		args := []string{"-y", "-hide_banner", "-loglevel", "error",
+			"-i", name, "-c:a", "libmp3lame", "-q:a", "8", bare + ".mp3"}
+
+		fmt.Println("执行：", "ffmpeg ", args)
+		cmd := exec.Command("ffmpeg", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		unwrap.Must(cmd.Run())
+		targets = append(targets, bare+".mp3")
+	}
+	return targets
 }
