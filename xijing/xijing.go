@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 
 	"github.com/shafreeck/miao/unwrap"
 )
@@ -77,9 +76,42 @@ func (c *Client) Download(id string) []string {
 	return names
 }
 
+type SearchResult struct {
+	R    int `json:"r"`
+	Data struct {
+		Count    int `json:"count"`
+		Page     int `json:"page"`
+		PageSize int `json:"page_size"`
+		List     []struct {
+			ID int `json:"id"`
+		} `json:"list"`
+	} `json:"data"`
+}
+
+func (c *Client) Search(keyword string) []int {
+	var ids []int
+	count := 0
+	page := 1
+	for {
+		result := SearchResult{}
+		uri := fmt.Sprintf("https://api.aipiaxi.com/discover/article/search?page=%d&page_size=100&q=default:term:%s", page, url.QueryEscape(keyword))
+		resp := unwrap.Err(http.Get(uri))
+		data := unwrap.Err(io.ReadAll(resp.Body))
+		unwrap.Must(json.Unmarshal(data, &result))
+		for _, item := range result.Data.List {
+			ids = append(ids, item.ID)
+		}
+		count += len(result.Data.List)
+		if count >= result.Data.Count {
+			break
+		}
+		page++
+	}
+	return ids
+}
+
 // translate to mp3 when necessary
 func MP3Codec(names []string) []string {
-
 	var targets []string
 	for _, name := range names {
 		ext := path.Ext(name)
@@ -88,7 +120,7 @@ func MP3Codec(names []string) []string {
 			continue
 		}
 		fmt.Println("转码 MP3: ", name)
-		bare := strings.TrimRight(name, ext)
+		bare := name[:len(name)-len(ext)]
 		args := []string{"-y", "-hide_banner", "-loglevel", "error",
 			"-i", name, "-c:a", "libmp3lame", "-q:a", "8", bare + ".mp3"}
 

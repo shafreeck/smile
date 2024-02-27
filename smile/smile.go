@@ -259,3 +259,30 @@ func (c *Client) ListSongs() []SongEntry {
 	}
 	return songs
 }
+
+// {"ids":[3461]}
+func (c *Client) RemoveSongs(ids ...int64) {
+	params := struct {
+		IDs []int64 `json:"ids"`
+	}{
+		IDs: ids,
+	}
+
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("/community/songs/remove", []byte(encoded))
+	defer resp.Body.Close()
+
+	ok := struct {
+		Code    int    `json:"code"`
+		Status  int    `json:"status"`
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}{}
+	data := unwrap.Err(io.ReadAll(resp.Body))
+	unwrap.Must(json.Unmarshal(saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data)))), &ok))
+
+	if ok.Code != 200 {
+		log.Fatal("create song share failed: ", ok)
+	}
+}
