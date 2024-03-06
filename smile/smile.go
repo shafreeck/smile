@@ -19,9 +19,9 @@ import (
 	"github.com/shafreeck/miao/unwrap"
 )
 
-const Endpoint = "http://www.smilemiao.com"
-const PlatformHeader = "pc_web"
-const APIPath = "/api/v2"
+const DefaultWebEndpoint = "http://www.smilemiao.com/api/v2"
+const DefaultAPIEndpoint = "https://api.smilemiao.com/v2"
+const PlatformHeader = "ios"
 
 type Client struct {
 	endpoint string
@@ -29,18 +29,46 @@ type Client struct {
 	aesb     cipher.Block
 }
 
-func New() *Client {
+type Option func(c *Client)
+
+func Endpoint(ep string) Option {
+	return func(c *Client) {
+		c.endpoint = ep
+	}
+}
+
+func New(opts ...Option) *Client {
+	c := &Client{endpoint: DefaultWebEndpoint}
+
+	for _, o := range opts {
+		o(c)
+	}
+
+	// read token from file
 	var token string
 	f, err := os.Open("smile-token.dat")
 	if err == nil {
 		token = strings.TrimSpace(string(unwrap.Err(io.ReadAll(f))))
 	}
+	c.token = token
+
+	// init the aes block
 	b := unwrap.Err(aes.NewCipher(saes.AESKey))
-	return &Client{endpoint: Endpoint, aesb: b, token: token}
+	c.aesb = b
+
+	return c
+}
+
+func NewWebClient() *Client {
+	return New(Endpoint(DefaultWebEndpoint))
+}
+
+func NewAPIClient() *Client {
+	return New(Endpoint(DefaultAPIEndpoint))
 }
 
 func (c *Client) url(path string) string {
-	return fmt.Sprintf("%s%s/%s", c.endpoint, APIPath, path)
+	return fmt.Sprintf("%s/%s", c.endpoint, path)
 }
 func (c *Client) httpGet(path string) *http.Response {
 	url := c.url(path)
@@ -285,4 +313,78 @@ func (c *Client) RemoveSongs(ids ...int64) {
 	if ok.Code != 200 {
 		log.Fatal("create song share failed: ", ok)
 	}
+}
+
+func (c *Client) CrackRoomPassword(rid string, password string) bool {
+	params := struct {
+		RoomID   string `json:"rid"`
+		Password string `json:"password"`
+		RoomInto int    `json:"roomInto"`
+		Tab      string `json:"tab"`
+		Knock    int    `json:"knock"`
+	}{
+		RoomID:   rid,
+		Password: password,
+		RoomInto: 1,
+		Tab:      "2-10",
+		Knock:    0,
+	}
+
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+
+	resp := c.httpPost("voiceroom/user/joinRoom", []byte(encoded))
+	defer resp.Body.Close()
+
+	ok := struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}{}
+	data := unwrap.Err(io.ReadAll(resp.Body))
+	unwrap.Must(json.Unmarshal(saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data)))), &ok))
+
+	if ok.Code != 200 {
+		log.Println(ok)
+	}
+
+	return ok.Code == 200
+}
+
+type RoomOwner struct {
+	ID        int64  `json:"id"`
+	Nick      string `json:"nick"`
+	Sex       int    `json:"sex"`
+	AI        int    `json:"ai"`
+	DisplayID int64  `json:"displayId"`
+}
+type Room struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Locked   int       `json:"locked"`
+	Password string    `json:"password"`
+	Heat     int       `json:"heat"`
+	Owner    RoomOwner `json:"owner"`
+}
+
+func (c *Client) ListRooms(tab string, page int) []Room {
+	// use default pageSize=10 to act as normal behavior
+	q := fmt.Sprintf("tab=%s&pageNo=%d&pageSize=10", tab, page)
+
+	resp := c.httpGet("voiceroom/list/queryRoomByTab?" + q)
+	data := unwrap.Err(io.ReadAll(resp.Body))
+	resp.Body.Close()
+	plain := saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data))))
+
+	ok := struct {
+		Code    int
+		Message string
+		Data    []Room
+	}{}
+
+	unwrap.Must(json.Unmarshal(plain, &ok))
+	if ok.Code != 200 {
+		log.Fatal(ok.Message)
+	}
+
+	return ok.Data
 }

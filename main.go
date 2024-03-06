@@ -2,14 +2,18 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/aes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/shafreeck/cortana"
 	"github.com/shafreeck/miao/saes"
@@ -37,6 +41,26 @@ func smileDecodeCommand() {
 	text := saes.AESDecrypt(b, data)
 	fmt.Println(string(text))
 
+}
+
+func smileEncodeCommand() {
+	args := struct {
+		Text string
+	}{}
+	cortana.Parse(&args)
+
+	plain := []byte(args.Text)
+	if len(plain) == 0 {
+		plain = bytes.TrimSpace(unwrap.Err(io.ReadAll(os.Stdin)))
+	}
+
+	b, err := aes.NewCipher(saes.AESKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data := saes.AESEncrypt(b, plain)
+	fmt.Println(base64.StdEncoding.EncodeToString(data))
 }
 
 func xijingDownloadCommand() {
@@ -244,11 +268,73 @@ func removeSongsCommand() {
 	fmt.Println("删除成功")
 }
 
+func crackRoomPassword() {
+	args := struct {
+		Delay    time.Duration `cortana:"--delay, -, 100ms"`
+		RoomID   string        `cortana:"--rid, -, -"`
+		Password string        `cortana:"password"`
+		DictFile string        `cortana:"--dict"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+
+	if args.Password == "" && args.DictFile != "" {
+		dict := unwrap.Err(os.Open(args.DictFile))
+		scanner := bufio.NewScanner(dict)
+		for scanner.Scan() {
+			password := scanner.Text()
+			if sm.CrackRoomPassword(args.RoomID, password) {
+				fmt.Println("密码是：", password)
+				return
+			}
+			time.Sleep(args.Delay)
+		}
+	} else if args.Password != "" {
+		if sm.CrackRoomPassword(args.RoomID, args.Password) {
+			fmt.Println("密码是：", args.Password)
+			return
+		}
+	} else {
+		cortana.Usage()
+		return
+	}
+	fmt.Println("密码错误")
+}
+
+func listRooms() {
+	args := struct {
+		Tab   string        `cortana:"--tab, -, 2-10"`
+		Page  int           `cortana:"--page, -p, 1"`
+		All   bool          `cortana:"--all"`
+		Delay time.Duration `cortana:"--delay, -, 1s"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	for p := args.Page; ; p++ {
+		rooms := sm.ListRooms(args.Tab, p)
+		for _, room := range rooms {
+			data := unwrap.Err(json.Marshal(room))
+			fmt.Println(string(data))
+		}
+		if !args.All {
+			break
+		}
+		if len(rooms) == 0 {
+			break
+		}
+		time.Sleep(args.Delay)
+	}
+
+}
+
 func main() {
 	cortana.AddRootCommand(downloadAndUploadCommand)
 	cortana.AddCommand("download", xijingDownloadCommand, "从戏鲸下载BGM")
 	cortana.AddCommand("search", xijingSearchCommand, "从戏鲸搜索BGM")
 	cortana.AddCommand("decode", smileDecodeCommand, "解码四喵密文")
+	cortana.AddCommand("encode", smileEncodeCommand, "编码四喵明文")
 	cortana.AddCommand("sms", smileSendSMSCommand, "发送短信验证码")
 	cortana.AddCommand("login", smileLoginCommand, "登录四喵")
 	cortana.AddCommand("oss upload", smileUploadOSSCommand, "上传 MP3 文件到 OSS")
@@ -258,5 +344,7 @@ func main() {
 	cortana.AddCommand("segment", segmentCommand, "分割 MP3")
 	cortana.AddCommand("switch", switchUserCommand, "切换用户")
 	cortana.AddCommand("remove", removeSongsCommand, "删除歌曲")
+	cortana.AddCommand("crack room", crackRoomPassword, "破解密码")
+	cortana.AddCommand("list rooms", listRooms, "列出直播间")
 	cortana.Launch()
 }
