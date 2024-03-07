@@ -355,6 +355,7 @@ type RoomOwner struct {
 	Nick      string `json:"nick"`
 	Sex       int    `json:"sex"`
 	AI        int    `json:"ai"`
+	Count     int    `json:"count"`
 	DisplayID int64  `json:"displayId"`
 }
 type Room struct {
