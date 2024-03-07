@@ -304,13 +304,31 @@ func crackRoomPassword() {
 
 func listRooms() {
 	args := struct {
-		Tab   string        `cortana:"--tab, -, 2-10"`
+		Tab   string        `cortana:"--tab, -,"`
 		Page  int           `cortana:"--page, -p, 1"`
 		All   bool          `cortana:"--all"`
 		Delay time.Duration `cortana:"--delay, -, 1s"`
+		Value string        `cortana:"<value>,, 日常"`
 	}{}
 	cortana.Parse(&args)
 
+	value2Tab := map[string]string{
+		"我的关注": "3-0",
+		"关注":   "3-0",
+		"附近":   "2-1000",
+		"发现":   "2-0",
+		"日常":   "2-10",
+		"综艺":   "2-11",
+		"唱见":   "2-12",
+		"萌新":   "2-17",
+		"游戏":   "2-15",
+		"速配":   "1-15",
+		"情感":   "1-16",
+		"拍拍":   "1-17",
+	}
+	if args.Value != "" && args.Tab == "" {
+		args.Tab = value2Tab[args.Value]
+	}
 	sm := smile.NewAPIClient()
 	for p := args.Page; ; p++ {
 		rooms := sm.ListRooms(args.Tab, p)
