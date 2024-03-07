@@ -24,9 +24,11 @@ const DefaultAPIEndpoint = "https://api.smilemiao.com/v2"
 const PlatformHeader = "ios"
 
 type Client struct {
-	endpoint string
-	token    string
 	aesb     cipher.Block
+	agent    string
+	token    string
+	endpoint string
+	platform string
 }
 
 type Option func(c *Client)
@@ -56,6 +58,15 @@ func New(opts ...Option) *Client {
 	b := unwrap.Err(aes.NewCipher(saes.AESKey))
 	c.aesb = b
 
+	// set properties for web or api
+	if c.endpoint == DefaultAPIEndpoint {
+		c.agent = "SmileMiao/2.2.0 (iPhone; iOS 17.3.1; Scale/3.00)"
+		c.platform = "ios"
+	} else {
+		c.platform = "pc_web"
+		c.agent = "Mozilla/4.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53"
+	}
+
 	return c
 }
 
@@ -73,9 +84,9 @@ func (c *Client) url(path string) string {
 func (c *Client) httpGet(path string) *http.Response {
 	url := c.url(path)
 	req := unwrap.Err(http.NewRequest(http.MethodGet, url, nil))
-	req.Header.Add("platform", PlatformHeader)
+	req.Header.Add("platform", c.platform)
 	req.Header.Add("token", c.token)
-	req.Header.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53")
+	req.Header.Add("user-agent", c.agent)
 	return unwrap.Err(http.DefaultClient.Do(req))
 }
 func (c *Client) httpPost(path string, payload []byte) *http.Response {
@@ -85,8 +96,8 @@ func (c *Client) httpPost(path string, payload []byte) *http.Response {
 
 	url := c.url(path)
 	req := unwrap.Err(http.NewRequest(http.MethodPost, url, bytes.NewReader(unwrap.Err(json.Marshal(params)))))
-	req.Header.Add("platform", PlatformHeader)
-	req.Header.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53")
+	req.Header.Add("platform", c.platform)
+	req.Header.Add("user-agent", c.agent)
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("token", c.token)
 	return unwrap.Err(http.DefaultClient.Do(req))
