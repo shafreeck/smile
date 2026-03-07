@@ -21,7 +21,29 @@ import (
 
 const DefaultWebEndpoint = "http://www.smilemiao.com/api/v2"
 const DefaultAPIEndpoint = "https://api.smilemiao.com/v2"
-const PlatformHeader = "ios"
+
+// endpointKind distinguishes between the web (browser) and app (mobile API) endpoints.
+// Each kind may use different URL paths and HTTP headers even when the request
+// parameters are identical.
+type endpointKind int
+
+const (
+	kindWeb endpointKind = iota
+	kindApp
+)
+
+// Web endpoint paths
+const (
+	webLoginPath = "community/ucenter"
+	webSMSPath   = "community/ucenter/sms"
+)
+
+// App endpoint paths — kept separate so they can diverge from the web paths
+// independently without touching every call-site.
+const (
+	appLoginPath = "community/ucenter"
+	appSMSPath   = "community/ucenter/sms"
+)
 
 type Client struct {
 	aesb     cipher.Block
@@ -29,6 +51,7 @@ type Client struct {
 	token    string
 	endpoint string
 	platform string
+	kind     endpointKind
 }
 
 type Option func(c *Client)
@@ -39,8 +62,20 @@ func Endpoint(ep string) Option {
 	}
 }
 
+// AppClient returns an Option that switches the client to app (mobile API) mode,
+// setting the correct endpoint, User-Agent, and platform header.
+func AppClient() Option {
+	return func(c *Client) {
+		c.endpoint = DefaultAPIEndpoint
+		c.kind = kindApp
+	}
+}
+
 func New(opts ...Option) *Client {
-	c := &Client{endpoint: DefaultWebEndpoint}
+	c := &Client{
+		endpoint: DefaultWebEndpoint,
+		kind:     kindWeb,
+	}
 
 	for _, o := range opts {
 		o(c)
@@ -58,11 +93,12 @@ func New(opts ...Option) *Client {
 	b := unwrap.Err(aes.NewCipher(saes.AESKey))
 	c.aesb = b
 
-	// set properties for web or api
-	if c.endpoint == DefaultAPIEndpoint {
+	// set User-Agent and platform header according to the endpoint kind
+	switch c.kind {
+	case kindApp:
 		c.agent = "SmileMiao/2.2.0 (iPhone; iOS 17.3.1; Scale/3.00)"
 		c.platform = "ios"
-	} else {
+	default: // kindWeb
 		c.platform = "pc_web"
 		c.agent = "Mozilla/4.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53"
 	}
@@ -71,15 +107,33 @@ func New(opts ...Option) *Client {
 }
 
 func NewWebClient() *Client {
-	return New(Endpoint(DefaultWebEndpoint))
+	return New()
 }
 
 func NewAPIClient() *Client {
-	return New(Endpoint(DefaultAPIEndpoint))
+	return New(AppClient())
 }
 
+// url constructs the full URL for the given path.  Leading slashes on the path
+// are stripped to avoid double-slash URLs regardless of how callers format them.
 func (c *Client) url(path string) string {
-	return fmt.Sprintf("%s/%s", c.endpoint, path)
+	return fmt.Sprintf("%s/%s", c.endpoint, strings.TrimPrefix(path, "/"))
+}
+
+// loginPath returns the correct login endpoint path for this client's kind.
+func (c *Client) loginPath() string {
+	if c.kind == kindApp {
+		return appLoginPath
+	}
+	return webLoginPath
+}
+
+// smsPath returns the correct SMS-code endpoint path for this client's kind.
+func (c *Client) smsPath() string {
+	if c.kind == kindApp {
+		return appSMSPath
+	}
+	return webSMSPath
 }
 func (c *Client) httpGet(path string) *http.Response {
 	url := c.url(path)
@@ -104,7 +158,22 @@ func (c *Client) httpPost(path string, payload []byte) *http.Response {
 
 }
 func (c *Client) SendSMSCode(phone string) {
-	resp := c.httpGet("community/ucenter/sms?phone=" + phone + "&command=6")
+	req := struct {
+		Phone       string `json:"phone"`
+		Command     int    `json:"command"`
+		CountryCode string `json:"countryCode"`
+		SendTime    int64  `json:"sendTime"`
+	}{
+		Phone:       phone,
+		Command:     6,
+		CountryCode: "86",
+		SendTime:    time.Now().UnixMilli(),
+	}
+	rawPayload := unwrap.Err(json.Marshal(req))
+	crypted := saes.AESEncrypt(c.aesb, rawPayload)
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	
+	resp := c.httpPost(c.smsPath(), []byte(encoded))
 	defer resp.Body.Close()
 
 	data := unwrap.Err(io.ReadAll(resp.Body))
@@ -134,7 +203,7 @@ func (c *Client) Login(phone, smscode string) {
 	}
 	payload := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(auth)))
 	encoded := base64.StdEncoding.EncodeToString(payload)
-	resp := c.httpPost("community/ucenter", []byte(encoded))
+	resp := c.httpPost(c.loginPath(), []byte(encoded))
 	defer resp.Body.Close()
 
 	ok := struct {
@@ -376,6 +445,15 @@ type Room struct {
 	Password string    `json:"password"`
 	Heat     int       `json:"heat"`
 	Owner    RoomOwner `json:"owner"`
+	Speakers []struct {
+		ID       int64 `json:"id"`
+		Role     int   `json:"role"`
+		Status   int   `json:"status"`
+		Muted    int   `json:"muted"`
+		Mic      int   `json:"mic"`
+		Miced    int   `json:"miced"`
+		Position int   `json:"position"`
+	}
 }
 
 func (c *Client) ListRooms(tab string, page int) []Room {
@@ -396,6 +474,61 @@ func (c *Client) ListRooms(tab string, page int) []Room {
 	unwrap.Must(json.Unmarshal(plain, &ok))
 	if ok.Code != 200 {
 		log.Fatal(ok.Message)
+	}
+
+	return ok.Data
+}
+
+type User struct {
+	ID     int    `json:"id"`
+	Nick   string `json:"nick"`
+	Avatar string `json:"avatar"`
+	Phone  string `json:"phone"`
+}
+
+func (c *Client) GetUser(id string) User {
+	// build request payload (mirrors the Dart structure)
+	params := struct {
+		IP        string `json:"ip"`
+		Latitude  string `json:"latitude"`
+		Longitude string `json:"longitude"`
+		Location  string `json:"location"`
+		Model     string `json:"model"`
+		Platform  int    `json:"platform"`
+		Version   string `json:"version"`
+	}{
+		IP:        "192.168.1.1",
+		Latitude:  "0",
+		Longitude: "0",
+		Location:  "",
+		Model:     "",
+		Platform:  1,
+		Version:   "3.1.3",
+	}
+
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+
+	resp := c.httpPost("community/ucenter/"+id, []byte(encoded))
+	defer resp.Body.Close()
+
+	// decode response
+	data := unwrap.Err(io.ReadAll(resp.Body))
+	plain := saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data))))
+	fmt.Println(string(plain))
+
+	ok := struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    User   `json:"data"`
+	}{}
+	unwrap.Must(json.Unmarshal(plain, &ok))
+
+	if ok.Code == 202 { // 登录过期
+		log.Fatal("登录过期")
+	}
+	if ok.Code != 200 {
+		log.Fatal("获取用户信息失败: ", ok.Message)
 	}
 
 	return ok.Data
