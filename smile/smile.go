@@ -534,7 +534,14 @@ func extractDataArray(plain []byte) ([]interface{}, error) {
 	}
 	arr, ok := dataVal.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("data is not an array")
+		// maybe it's under data.content (like in ListSongs)
+		if mData, ok := dataVal.(map[string]interface{}); ok {
+			if content, ok := mData["content"].([]interface{}); ok {
+				return content, nil
+			}
+			return nil, fmt.Errorf("data is not an array and has no content array")
+		}
+		return nil, fmt.Errorf("data is not an array, type: %T", dataVal)
 	}
 	return arr, nil
 }
@@ -560,7 +567,13 @@ func filterItems(arr []interface{}, cutoff int64, collected []interface{}, limit
 		if !ok {
 			continue
 		}
-		if itemCreateTimeMs(m) >= cutoff {
+		t := itemCreateTimeMs(m)
+		// If it's a valid timestamp older than our cutoff, we can stop paginating entirely.
+		if t > 0 && t < cutoff {
+			return collected, true
+		}
+		// Otherwise, keep the item (including items where we couldn't parse the time, like ads)
+		if t >= cutoff || t == 0 {
 			collected = append(collected, item)
 		}
 		if limit > 0 && len(collected) >= limit {

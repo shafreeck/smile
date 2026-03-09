@@ -394,7 +394,7 @@ func getFeedCommand() {
 	args := struct {
 		Hot   bool          `cortana:"--hot"`
 		UID   string        `cortana:"--uid"`
-		Tab   string        `cortana:"--tab"`
+		Tab   string        `cortana:"--tab, -, , 发现|最新|找搭子|日常|游戏|萌新"`
 		Since time.Duration `cortana:"--since, -, 48h"`
 		Limit int           `cortana:"--limit, -, 50"`
 	}{}
@@ -454,6 +454,6 @@ func main() {
 	cortana.AddCommand("get user", getUserCommand, "获取用户信息")
 	cortana.AddCommand("users", getUsersCommand, "批量查询用户信息")
 	cortana.AddCommand("visitors", getVisitorsCommand, "获取访客列表")
-	cortana.AddCommand("feed", getFeedCommand, "获取动态/Feed (--hot | --uid <id> | --tab <id>)")
+	cortana.AddCommand("feed", getFeedCommand, "获取动态/Feed (--hot | --uid <id> | --tab <发现|最新|找搭子|日常|游戏|萌新>)")
 	cortana.Launch()
 }
