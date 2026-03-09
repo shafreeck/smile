@@ -392,9 +392,11 @@ func getVisitorsCommand() {
 
 func getFeedCommand() {
 	args := struct {
-		Hot bool   `cortana:"--hot"`
-		UID string `cortana:"--uid"`
-		Tab string `cortana:"--tab"`
+		Hot   bool          `cortana:"--hot"`
+		UID   string        `cortana:"--uid"`
+		Tab   string        `cortana:"--tab"`
+		Since time.Duration `cortana:"--since, -, 48h"`
+		Limit int           `cortana:"--limit, -, 50"`
 	}{}
 	cortana.Parse(&args)
 
@@ -402,20 +404,26 @@ func getFeedCommand() {
 	var plain []byte
 	switch {
 	case args.Hot:
-		plain = sm.GetFeedHot()
+		plain = sm.GetFeedHot(args.Since, args.Limit)
 	case args.UID != "":
-		plain = sm.GetFeedByUser(args.UID)
+		plain = sm.GetFeedByUser(args.UID, args.Since, args.Limit)
 	case args.Tab != "":
 		tabID := args.Tab
 		switch args.Tab {
-		case "发现": tabID = "1"
-		case "最新": tabID = "2"
-		case "找搭子": tabID = "3"
-		case "日常": tabID = "4"
-		case "游戏": tabID = "5"
-		case "萌新": tabID = "6"
+		case "发现":
+			tabID = "1"
+		case "最新":
+			tabID = "2"
+		case "找搭子":
+			tabID = "3"
+		case "日常":
+			tabID = "4"
+		case "游戏":
+			tabID = "5"
+		case "萌新":
+			tabID = "6"
 		}
-		plain = sm.GetFeedByTab(tabID)
+		plain = sm.GetFeedByTab(tabID, args.Since, args.Limit)
 	default:
 		cortana.Usage()
 		return

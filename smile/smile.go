@@ -521,25 +521,122 @@ func (c *Client) GetVisitors(timestamp int64) []byte {
 	return c.decodeResp(resp)
 }
 
-// GetFeedHot returns the daily hot-list feed.
+// extractDataArray unmarshals a JSON response and returns the top-level "data"
+// field as a slice of items.
+func extractDataArray(plain []byte) ([]interface{}, error) {
+	var m map[string]interface{}
+	if err := json.Unmarshal(plain, &m); err != nil {
+		return nil, err
+	}
+	dataVal, ok := m["data"]
+	if !ok {
+		return nil, fmt.Errorf("no data field")
+	}
+	arr, ok := dataVal.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("data is not an array")
+	}
+	return arr, nil
+}
+
+// itemCreateTimeMs returns the createTime (milliseconds) from a feed item,
+// checking .daily.createTime first then .createTime.
+func itemCreateTimeMs(item map[string]interface{}) int64 {
+	if daily, ok := item["daily"].(map[string]interface{}); ok {
+		if ct, ok := daily["createTime"].(float64); ok {
+			return int64(ct)
+		}
+	}
+	if ct, ok := item["createTime"].(float64); ok {
+		return int64(ct)
+	}
+	return 0
+}
+
+// filterItems filters arr to items newer than cutoff and truncates to limit.
+func filterItems(arr []interface{}, cutoff int64, collected []interface{}, limit int) ([]interface{}, bool) {
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if itemCreateTimeMs(m) >= cutoff {
+			collected = append(collected, item)
+		}
+		if limit > 0 && len(collected) >= limit {
+			return collected, true
+		}
+	}
+	return collected, false
+}
+
+// GetFeedHot returns the daily hot-list feed filtered by since/limit.
 // GET /v2/community/dailies/dailyHotList
-func (c *Client) GetFeedHot() []byte {
+func (c *Client) GetFeedHot(since time.Duration, limit int) []byte {
 	resp := c.httpGet("community/dailies/dailyHotList")
-	return c.decodeResp(resp)
+	plain := c.decodeResp(resp)
+
+	arr, err := extractDataArray(plain)
+	if err != nil {
+		return plain
+	}
+	cutoff := time.Now().Add(-since).UnixMilli()
+	result, _ := filterItems(arr, cutoff, nil, limit)
+	if result == nil {
+		result = []interface{}{}
+	}
+	out, _ := json.Marshal(result)
+	return out
 }
 
-// GetFeedByUser returns the feed for a specific user.
-// GET /v2/community/dailies/users/{uid}
-func (c *Client) GetFeedByUser(uid string) []byte {
-	resp := c.httpGet("community/dailies/users/" + uid)
-	return c.decodeResp(resp)
+// GetFeedByUser returns the feed for a specific user filtered by since/limit.
+// GET /v2/community/dailies/users/{uid}?pageNo={n}
+func (c *Client) GetFeedByUser(uid string, since time.Duration, limit int) []byte {
+	cutoff := time.Now().Add(-since).UnixMilli()
+	var result []interface{}
+	for pageNo := 1; ; pageNo++ {
+		resp := c.httpGet(fmt.Sprintf("community/dailies/users/%s?pageNo=%d", uid, pageNo))
+		plain := c.decodeResp(resp)
+		arr, err := extractDataArray(plain)
+		if err != nil || len(arr) == 0 {
+			break
+		}
+		var done bool
+		result, done = filterItems(arr, cutoff, result, limit)
+		if done {
+			break
+		}
+	}
+	if result == nil {
+		result = []interface{}{}
+	}
+	out, _ := json.Marshal(result)
+	return out
 }
 
-// GetFeedByTab returns the feed for a specific tab.
-// GET /v2/community/dailies/queryByTab?tabId={tabID}
-func (c *Client) GetFeedByTab(tabID string) []byte {
-	resp := c.httpGet("community/dailies/queryByTab?tabId=" + tabID)
-	return c.decodeResp(resp)
+// GetFeedByTab returns the feed for a specific tab filtered by since/limit.
+// GET /v2/community/dailies/queryByTab?tabId={tabID}&pageNo={n}
+func (c *Client) GetFeedByTab(tabID string, since time.Duration, limit int) []byte {
+	cutoff := time.Now().Add(-since).UnixMilli()
+	var result []interface{}
+	for pageNo := 0; ; pageNo++ {
+		resp := c.httpGet(fmt.Sprintf("community/dailies/queryByTab?tabId=%s&pageNo=%d", tabID, pageNo))
+		plain := c.decodeResp(resp)
+		arr, err := extractDataArray(plain)
+		if err != nil || len(arr) == 0 {
+			break
+		}
+		var done bool
+		result, done = filterItems(arr, cutoff, result, limit)
+		if done {
+			break
+		}
+	}
+	if result == nil {
+		result = []interface{}{}
+	}
+	out, _ := json.Marshal(result)
+	return out
 }
 
 func (c *Client) GetUser(id string) User {
