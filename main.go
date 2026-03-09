@@ -277,7 +277,7 @@ func crackRoomPassword() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 
 	if args.Password == "" && args.DictFile != "" {
 		dict := unwrap.Err(os.Open(args.DictFile))
@@ -329,7 +329,7 @@ func listRooms() {
 	if args.Value != "" && args.Tab == "" {
 		args.Tab = value2Tab[args.Value]
 	}
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	for p := args.Page; ; p++ {
 		rooms := sm.ListRooms(args.Tab, p)
 		for _, room := range rooms {
@@ -353,7 +353,7 @@ func getUserCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	u := sm.GetUser(args.ID)
 	b := unwrap.Err(json.Marshal(u))
 	fmt.Println(string(b))
@@ -365,7 +365,7 @@ func getUsersCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.BatchQueryUsers(args.IDs)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -383,7 +383,7 @@ func getVisitorsCommand() {
 		ts = time.Now().UnixMilli()
 	}
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.GetVisitors(ts)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -398,7 +398,7 @@ func getFeedCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	var plain []byte
 	switch {
 	case args.Hot:
