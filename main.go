@@ -406,7 +406,16 @@ func getFeedCommand() {
 	case args.UID != "":
 		plain = sm.GetFeedByUser(args.UID)
 	case args.Tab != "":
-		plain = sm.GetFeedByTab(args.Tab)
+		tabID := args.Tab
+		switch args.Tab {
+		case "发现": tabID = "1"
+		case "最新": tabID = "2"
+		case "找搭子": tabID = "3"
+		case "日常": tabID = "4"
+		case "游戏": tabID = "5"
+		case "萌新": tabID = "6"
+		}
+		plain = sm.GetFeedByTab(tabID)
 	default:
 		cortana.Usage()
 		return
