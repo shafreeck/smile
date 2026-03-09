@@ -347,6 +347,76 @@ func listRooms() {
 
 }
 
+func getUserCommand() {
+	args := struct {
+		ID string `cortana:"id, -, auto"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	u := sm.GetUser(args.ID)
+	b := unwrap.Err(json.Marshal(u))
+	fmt.Println(string(b))
+}
+
+func getUsersCommand() {
+	args := struct {
+		IDs string `cortana:"ids, -, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	plain := sm.BatchQueryUsers(args.IDs)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func getVisitorsCommand() {
+	args := struct {
+		Time int64 `cortana:"--time, -, 0"`
+	}{}
+	cortana.Parse(&args)
+
+	ts := args.Time
+	if ts == 0 {
+		ts = time.Now().UnixMilli()
+	}
+
+	sm := smile.NewAPIClient()
+	plain := sm.GetVisitors(ts)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func getFeedCommand() {
+	args := struct {
+		Hot bool   `cortana:"--hot"`
+		UID string `cortana:"--uid"`
+		Tab string `cortana:"--tab"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	var plain []byte
+	switch {
+	case args.Hot:
+		plain = sm.GetFeedHot()
+	case args.UID != "":
+		plain = sm.GetFeedByUser(args.UID)
+	case args.Tab != "":
+		plain = sm.GetFeedByTab(args.Tab)
+	default:
+		cortana.Usage()
+		return
+	}
+
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
 func main() {
 	cortana.AddRootCommand(downloadAndUploadCommand)
 	cortana.AddCommand("download", xijingDownloadCommand, "从戏鲸下载BGM")
@@ -364,5 +434,9 @@ func main() {
 	cortana.AddCommand("remove", removeSongsCommand, "删除歌曲")
 	cortana.AddCommand("crack room", crackRoomPassword, "破解密码")
 	cortana.AddCommand("list rooms", listRooms, "列出直播间")
+	cortana.AddCommand("get user", getUserCommand, "获取用户信息")
+	cortana.AddCommand("users", getUsersCommand, "批量查询用户信息")
+	cortana.AddCommand("visitors", getVisitorsCommand, "获取访客列表")
+	cortana.AddCommand("feed", getFeedCommand, "获取动态/Feed (--hot | --uid <id> | --tab <id>)")
 	cortana.Launch()
 }

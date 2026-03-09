@@ -486,6 +486,62 @@ type User struct {
 	Phone  string `json:"phone"`
 }
 
+// prettyJSON indents raw JSON for readable CLI output.
+func prettyJSON(data []byte) string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, data, "", "  "); err != nil {
+		return string(data)
+	}
+	return buf.String()
+}
+
+// decodeResp reads the HTTP body, AES-decrypts it, and returns the plaintext.
+func (c *Client) decodeResp(resp *http.Response) []byte {
+	defer resp.Body.Close()
+	data := unwrap.Err(io.ReadAll(resp.Body))
+	return saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data))))
+}
+
+// BatchQueryUsers queries multiple users by a comma-separated ID string.
+// POST /v2/community/chat/batchQueryUsers  {"ids":"123,456"}
+func (c *Client) BatchQueryUsers(ids string) []byte {
+	params := struct {
+		IDs string `json:"ids"`
+	}{IDs: ids}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/chat/batchQueryUsers", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
+// GetVisitors returns the visitor-change list since the given Unix-millisecond timestamp.
+// GET /v2/community/ucenter/visitors/change?time={timestamp}
+func (c *Client) GetVisitors(timestamp int64) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/ucenter/visitors/change?time=%d", timestamp))
+	return c.decodeResp(resp)
+}
+
+// GetFeedHot returns the daily hot-list feed.
+// GET /v2/community/dailies/dailyHotList
+func (c *Client) GetFeedHot() []byte {
+	resp := c.httpGet("community/dailies/dailyHotList")
+	return c.decodeResp(resp)
+}
+
+// GetFeedByUser returns the feed for a specific user.
+// GET /v2/community/dailies/users/{uid}
+func (c *Client) GetFeedByUser(uid string) []byte {
+	resp := c.httpGet("community/dailies/users/" + uid)
+	return c.decodeResp(resp)
+}
+
+// GetFeedByTab returns the feed for a specific tab.
+// GET /v2/community/dailies/queryByTab?tabId={tabID}
+func (c *Client) GetFeedByTab(tabID string) []byte {
+	resp := c.httpGet("community/dailies/queryByTab?tabId=" + tabID)
+	return c.decodeResp(resp)
+}
+
 func (c *Client) GetUser(id string) User {
 	// build request payload (mirrors the Dart structure)
 	params := struct {
