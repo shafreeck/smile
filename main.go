@@ -457,6 +457,59 @@ func getFeedCommand() {
 	fmt.Println(buf.String())
 }
 
+func inboxCommand() {
+	sm := smile.NewWebClient()
+	plain := sm.GetInbox()
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func cpCommand() {
+	args := struct {
+		UID string `cortana:"uid, -, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewWebClient()
+	plain := sm.GetCPInfo(args.UID)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func listenCommand() {
+	args := struct {
+		RID string `cortana:"--rid, -r, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewWebClient()
+	plain := sm.ListenRoom(args.RID)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func followsCommand() {
+	args := struct {
+		UID  string `cortana:"uid, -, -"`
+		Fans bool   `cortana:"--fans"`
+	}{}
+	cortana.Parse(&args)
+
+	followType := 1
+	if args.Fans {
+		followType = 2
+	}
+
+	sm := smile.NewWebClient()
+	plain := sm.GetFollows(args.UID, followType)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
 func main() {
 	cortana.AddRootCommand(downloadAndUploadCommand)
 	cortana.AddCommand("download", xijingDownloadCommand, "从戏鲸下载BGM")
@@ -478,5 +531,9 @@ func main() {
 	cortana.AddCommand("users", getUsersCommand, "批量查询用户信息")
 	cortana.AddCommand("visitors", getVisitorsCommand, "获取访客列表")
 	cortana.AddCommand("feed", getFeedCommand, "获取动态/Feed (--hot | --uid <id> | --tab <发现|最新|找搭子|日常|游戏|萌新>)")
+	cortana.AddCommand("inbox", inboxCommand, "获取最新聊天会话列表")
+	cortana.AddCommand("cp", cpCommand, "获取亲密CP信息")
+	cortana.AddCommand("listen", listenCommand, "获取直播间弹幕 (--rid <房间ID>)")
+	cortana.AddCommand("follows", followsCommand, "获取关注列表 (--fans 切换为粉丝列表)")
 	cortana.Launch()
 }

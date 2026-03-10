@@ -652,6 +652,35 @@ func (c *Client) GetFeedByTab(tabID string, since time.Duration, limit int) []by
 	return out
 }
 
+// GetInbox returns the latest chat sessions.
+// GET /v2/community/chat/getlatestsession?pageNo=1&pageSize=100&updateTime=0
+func (c *Client) GetInbox() []byte {
+	resp := c.httpGet("community/chat/getlatestsession?pageNo=1&pageSize=100&updateTime=0")
+	return c.decodeResp(resp)
+}
+
+// GetCPInfo returns intimate CP info for the given target UID.
+// GET /v2/community/intimate/queryCpIntimateFriendInfo?targetUid={uid}
+func (c *Client) GetCPInfo(targetUID string) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/intimate/queryCpIntimateFriendInfo?targetUid=%s", targetUID))
+	return c.decodeResp(resp)
+}
+
+// ListenRoom returns current broadcast danmu for the given room ID.
+// GET /v2/voiceroom/danmu/pullCurrentBroadcast?rid={rid}
+func (c *Client) ListenRoom(rid string) []byte {
+	resp := c.httpGet(fmt.Sprintf("voiceroom/danmu/pullCurrentBroadcast?rid=%s", rid))
+	return c.decodeResp(resp)
+}
+
+// GetFollows returns the follow/follower list for the given user.
+// type=1 for following, type=2 for followers.
+// GET /v2/community/pop/queryUserFollowList?pageNum=1&pageSize=100&targetUid={uid}&type={type}
+func (c *Client) GetFollows(targetUID string, followType int) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/pop/queryUserFollowList?pageNum=1&pageSize=100&targetUid=%s&type=%d", targetUID, followType))
+	return c.decodeResp(resp)
+}
+
 func (c *Client) GetUser(id string) User {
 	// build request payload (mirrors the Dart structure)
 	params := struct {
