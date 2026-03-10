@@ -478,19 +478,6 @@ func cpCommand() {
 	fmt.Println(buf.String())
 }
 
-func listenCommand() {
-	args := struct {
-		RID string `cortana:"--rid, -r, -"`
-	}{}
-	cortana.Parse(&args)
-
-	sm := smile.NewWebClient()
-	plain := sm.ListenRoom(args.RID)
-	var buf bytes.Buffer
-	json.Indent(&buf, plain, "", "  ")
-	fmt.Println(buf.String())
-}
-
 func followsCommand() {
 	args := struct {
 		UID  string `cortana:"uid, -, -"`
@@ -533,7 +520,6 @@ func main() {
 	cortana.AddCommand("feed", getFeedCommand, "获取动态/Feed (--hot | --uid <id> | --tab <发现|最新|找搭子|日常|游戏|萌新>)")
 	cortana.AddCommand("inbox", inboxCommand, "获取最新聊天会话列表")
 	cortana.AddCommand("cp", cpCommand, "获取亲密CP信息")
-	cortana.AddCommand("listen", listenCommand, "获取直播间弹幕 (--rid <房间ID>)")
 	cortana.AddCommand("follows", followsCommand, "获取关注列表 (--fans 切换为粉丝列表)")
 	cortana.Launch()
 }

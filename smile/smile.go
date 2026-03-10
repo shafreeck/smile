@@ -666,12 +666,6 @@ func (c *Client) GetCPInfo(targetUID string) []byte {
 	return c.decodeResp(resp)
 }
 
-// ListenRoom returns current broadcast danmu for the given room ID.
-// GET /v2/voiceroom/danmu/pullCurrentBroadcast?rid={rid}
-func (c *Client) ListenRoom(rid string) []byte {
-	resp := c.httpGet(fmt.Sprintf("voiceroom/danmu/pullCurrentBroadcast?rid=%s", rid))
-	return c.decodeResp(resp)
-}
 
 // GetFollows returns the follow/follower list for the given user.
 // type=1 for following, type=2 for followers.
