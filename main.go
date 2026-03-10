@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -390,23 +391,45 @@ func getVisitorsCommand() {
 	fmt.Println(buf.String())
 }
 
+func parseDuration(s string) time.Duration {
+	s = strings.TrimSpace(s)
+	if strings.HasSuffix(s, "d") {
+		days, _ := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		return time.Duration(days) * 24 * time.Hour
+	}
+	if strings.HasSuffix(s, "w") {
+		weeks, _ := strconv.Atoi(strings.TrimSuffix(s, "w"))
+		return time.Duration(weeks) * 7 * 24 * time.Hour
+	}
+	if strings.HasSuffix(s, "y") {
+		years, _ := strconv.Atoi(strings.TrimSuffix(s, "y"))
+		return time.Duration(years) * 365 * 24 * time.Hour
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 48 * time.Hour
+	}
+	return d
+}
+
 func getFeedCommand() {
 	args := struct {
-		Hot   bool          `cortana:"--hot"`
-		UID   string        `cortana:"--uid"`
-		Tab   string        `cortana:"--tab, -, , 发现|最新|找搭子|日常|游戏|萌新"`
-		Since time.Duration `cortana:"--since, -, 48h"`
-		Limit int           `cortana:"--limit, -, 50"`
+		Hot   bool   `cortana:"--hot"`
+		UID   string `cortana:"--uid"`
+		Tab   string `cortana:"--tab, -, , 发现|最新|找搭子|日常|游戏|萌新"`
+		Since string `cortana:"--since, -, 48h, 时间范围(支持h/d/w/y, 如3d, 1y)"`
+		Limit int    `cortana:"--limit, -, 50"`
 	}{}
 	cortana.Parse(&args)
 
 	sm := smile.NewWebClient()
 	var plain []byte
+	sinceDur := parseDuration(args.Since)
 	switch {
 	case args.Hot:
-		plain = sm.GetFeedHot(args.Since, args.Limit)
+		plain = sm.GetFeedHot(sinceDur, args.Limit)
 	case args.UID != "":
-		plain = sm.GetFeedByUser(args.UID, args.Since, args.Limit)
+		plain = sm.GetFeedByUser(args.UID, sinceDur, args.Limit)
 	case args.Tab != "":
 		tabID := args.Tab
 		switch args.Tab {
@@ -423,7 +446,7 @@ func getFeedCommand() {
 		case "萌新":
 			tabID = "6"
 		}
-		plain = sm.GetFeedByTab(tabID, args.Since, args.Limit)
+		plain = sm.GetFeedByTab(tabID, sinceDur, args.Limit)
 	default:
 		cortana.Usage()
 		return
