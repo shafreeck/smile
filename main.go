@@ -213,7 +213,10 @@ func downloadAndUploadCommand() {
 	cortana.Parse(&args)
 
 	idIndex := make(map[string][]string)
-	files := unwrap.Err(os.ReadDir("bgm/"))
+	var files []os.DirEntry
+	if _, err := os.Stat("bgm/"); err == nil {
+		files = unwrap.Err(os.ReadDir("bgm/"))
+	}
 	for _, file := range files {
 		name := file.Name()
 		i := strings.Index(name, "-")
@@ -517,7 +520,7 @@ func getFeedCommand() {
 }
 
 func inboxCommand() {
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.GetInbox()
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -530,7 +533,7 @@ func cpCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.GetCPInfo(args.UID)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -549,7 +552,7 @@ func followsCommand() {
 		followType = 2
 	}
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.GetFollows(args.UID, followType)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -562,7 +565,7 @@ func postCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.PostDaily(strings.Join(args.Content, " "))
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -575,7 +578,7 @@ func rmDailyCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.RemoveDaily(args.ID)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -589,10 +592,14 @@ func msgCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	plain := sm.SendMessage(args.ToUID, strings.Join(args.Text, " "))
+	// try to parse as JSON, if fails just print raw
 	var buf bytes.Buffer
-	json.Indent(&buf, plain, "", "  ")
+	if err := json.Indent(&buf, plain, "", "  "); err != nil {
+		fmt.Println(string(plain))
+		return
+	}
 	fmt.Println(buf.String())
 }
 

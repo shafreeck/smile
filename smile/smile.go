@@ -768,6 +768,14 @@ func (c *Client) RemoveDaily(id string) []byte {
 	return c.decodeResp(resp)
 }
 
+// GetOrCreateSession gets or creates a chat session for the given targetUID.
+// This is needed before sending a message to a user we haven't chatted with before.
+// GET /v2/community/godPay/querychatbar?targetUid={uid}
+func (c *Client) GetOrCreateSession(targetUID string) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/godPay/querychatbar?targetUid=%s", targetUID))
+	return c.decodeResp(resp)
+}
+
 // SendMessage sends a private message to toUID.
 // The msgData field is AES-encrypted+Base64-encoded text; the whole payload is then
 // AES-encrypted+Base64-encoded as usual.
@@ -775,6 +783,39 @@ func (c *Client) RemoveDaily(id string) []byte {
 func (c *Client) SendMessage(toUID string, text string) []byte {
 	uid, _ := strconv.ParseInt(toUID, 10, 64)
 	clientID := time.Now().UnixMilli()
+
+	// First, try to get sessionId from inbox
+	sessionID := int64(0)
+	inboxResp := c.GetInbox()
+	var inbox struct {
+		Data struct {
+			SessionList []struct {
+				EntityID int64 `json:"entity_id"`
+				SessionID int64 `json:"session_id"`
+			} `json:"session_info_list"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(inboxResp, &inbox); err == nil {
+		for _, s := range inbox.Data.SessionList {
+			if s.EntityID == uid {
+				sessionID = s.SessionID
+				break
+			}
+		}
+	}
+
+	// If no session found in inbox, try to get/create one via querychatbar
+	if sessionID == 0 {
+		sessionResp := c.GetOrCreateSession(toUID)
+		var scr struct {
+			Data struct {
+				SessionID int64 `json:"session_id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(sessionResp, &scr); err == nil {
+			sessionID = scr.Data.SessionID
+		}
+	}
 
 	// encrypt msgData
 	msgCrypted := saes.AESEncrypt(c.aesb, []byte(text))
@@ -785,15 +826,23 @@ func (c *Client) SendMessage(toUID string, text string) []byte {
 		ToUID          int64  `json:"toUid"`
 		SessionID      int64  `json:"sessionId"`
 		ClientID       int64  `json:"clientId"`
-		MsgContentType int    `json:"msgContentType"`
+		ReferUserIDList []int `json:"referUserIdList"`
 		MsgData        string `json:"msgData"`
+		ExtData        string `json:"extData"`
+		MsgContentType int    `json:"msgContentType"`
+		OtherMsgType   int    `json:"otherMsgType"`
+		ReplyMsgID     int64  `json:"replyMsgId"`
 	}{
 		SessionType:    1,
 		ToUID:          uid,
-		SessionID:      0,
+		SessionID:      sessionID,
 		ClientID:       clientID,
-		MsgContentType: 1,
+		ReferUserIDList: []int{},
 		MsgData:        msgData,
+		ExtData:        "",
+		MsgContentType: 1,
+		OtherMsgType:   0,
+		ReplyMsgID:     0,
 	}
 	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
 	encoded := base64.StdEncoding.EncodeToString(crypted)
