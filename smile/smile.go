@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -496,9 +497,15 @@ func prettyJSON(data []byte) string {
 }
 
 // decodeResp reads the HTTP body, AES-decrypts it, and returns the plaintext.
+// If the body starts with '{' or '[' it is already plain JSON (e.g. an error
+// response) and is returned as-is without base64/AES decoding.
 func (c *Client) decodeResp(resp *http.Response) []byte {
 	defer resp.Body.Close()
 	data := unwrap.Err(io.ReadAll(resp.Body))
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+		return trimmed
+	}
 	return saes.AESDecrypt(c.aesb, unwrap.Err(base64.StdEncoding.DecodeString(string(data))))
 }
 
@@ -678,7 +685,7 @@ func (c *Client) GetFollows(targetUID string, followType int) []byte {
 // SearchUsers searches for users by keyword.
 // GET /v2/community/search/user?keyword={keyword}&pageNo={pageNo}&pageSize=20
 func (c *Client) SearchUsers(keyword string, pageNo int) []byte {
-	resp := c.httpGet(fmt.Sprintf("community/search/user?keyword=%s&pageNo=%d&pageSize=20", keyword, pageNo))
+	resp := c.httpGet(fmt.Sprintf("community/search/user?keyword=%s&pageNo=%d&pageSize=20", url.QueryEscape(keyword), pageNo))
 	return c.decodeResp(resp)
 }
 
