@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -667,18 +668,27 @@ func (c *Client) GetInbox() []byte {
 }
 
 // GetCPInfo returns intimate CP info for the given target UID.
-// GET /v2/community/intimate/queryCpIntimateFriendInfo?targetUid={uid}
+// POST /v2/community/intimate/queryCpIntimateFriendInfo {"id":uid}
 func (c *Client) GetCPInfo(targetUID string) []byte {
-	resp := c.httpGet(fmt.Sprintf("community/intimate/queryCpIntimateFriendInfo?targetUid=%s", targetUID))
+	id, _ := strconv.ParseInt(targetUID, 10, 64)
+	params := map[string]interface{}{"id": id}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/intimate/queryCpIntimateFriendInfo", []byte(encoded))
 	return c.decodeResp(resp)
 }
 
 
 // GetFollows returns the follow/follower list for the given user.
-// type=1 for following, type=2 for followers.
-// GET /v2/community/pop/queryUserFollowList?pageNum=1&pageSize=100&targetUid={uid}&type={type}
+// followType=1 for following, followType=2 for followers.
 func (c *Client) GetFollows(targetUID string, followType int) []byte {
-	resp := c.httpGet(fmt.Sprintf("community/pop/queryUserFollowList?pageNum=1&pageSize=100&targetUid=%s&type=%d", targetUID, followType))
+	var endpoint string
+	if followType == 1 {
+		endpoint = fmt.Sprintf("community/ucenter/following?pageSize=100&tuid=%s&pageNo=1&keywords=", targetUID)
+	} else {
+		endpoint = fmt.Sprintf("community/ucenter/followers?pageSize=100&tuid=%s&pageNo=1&keywords=", targetUID)
+	}
+	resp := c.httpGet(endpoint)
 	return c.decodeResp(resp)
 }
 
