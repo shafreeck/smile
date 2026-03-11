@@ -93,6 +93,65 @@ func xijingSearchCommand() {
 	}
 }
 
+func smileSearchCommand() {
+	args := struct {
+		Keyword string `cortana:"keyword, -, -"`
+		User    bool   `cortana:"--user"`
+		Room    bool   `cortana:"--room"`
+		Topic   bool   `cortana:"--topic"`
+		Feed    bool   `cortana:"--feed"`
+		Page    int    `cortana:"--page, -p, 1"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	results := make(map[string]interface{})
+
+	addResult := func(key string, plain []byte) {
+		var val interface{}
+		if err := json.Unmarshal(plain, &val); err != nil {
+			results[key] = string(plain)
+		} else {
+			results[key] = val
+		}
+	}
+
+	isIntegrated := !args.User && !args.Room && !args.Topic && !args.Feed
+
+	if isIntegrated {
+		type res struct {
+			key string
+			val []byte
+		}
+		ch := make(chan res, 4)
+		go func() { ch <- res{"users", sm.SearchUsers(args.Keyword, args.Page)} }()
+		go func() { ch <- res{"rooms", sm.SearchRooms(args.Keyword, args.Page)} }()
+		go func() { ch <- res{"topics", sm.SearchTopics(args.Keyword, args.Page)} }()
+		go func() { ch <- res{"feeds", sm.SearchDailies(args.Keyword, args.Page)} }()
+
+		for i := 0; i < 4; i++ {
+			r := <-ch
+			addResult(r.key, r.val)
+		}
+	} else {
+		if args.User {
+			addResult("users", sm.SearchUsers(args.Keyword, args.Page))
+		}
+		if args.Room {
+			addResult("rooms", sm.SearchRooms(args.Keyword, args.Page))
+		}
+		if args.Topic {
+			addResult("topics", sm.SearchTopics(args.Keyword, args.Page))
+		}
+		if args.Feed {
+			addResult("feeds", sm.SearchDailies(args.Keyword, args.Page))
+		}
+	}
+
+	b, _ := json.MarshalIndent(results, "", "  ")
+	fmt.Println(string(b))
+}
+
 func smileSendSMSCommand() {
 	args := struct {
 		Phone string `cortana:"--phone, -, -"`
@@ -500,7 +559,8 @@ func followsCommand() {
 func main() {
 	cortana.AddRootCommand(downloadAndUploadCommand)
 	cortana.AddCommand("download", xijingDownloadCommand, "从戏鲸下载BGM")
-	cortana.AddCommand("search", xijingSearchCommand, "从戏鲸搜索BGM")
+	cortana.AddCommand("search-bgm", xijingSearchCommand, "从戏鲸搜索BGM")
+	cortana.AddCommand("search", smileSearchCommand, "四喵综合搜索 (--user | --room | --topic | --feed)")
 	cortana.AddCommand("decode", smileDecodeCommand, "解码四喵密文")
 	cortana.AddCommand("encode", smileEncodeCommand, "编码四喵明文")
 	cortana.AddCommand("sms", smileSendSMSCommand, "发送短信验证码")

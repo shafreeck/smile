@@ -675,6 +675,56 @@ func (c *Client) GetFollows(targetUID string, followType int) []byte {
 	return c.decodeResp(resp)
 }
 
+// SearchUsers searches for users by keyword.
+// GET /v2/community/search/user?keyword={keyword}&pageNo={pageNo}&pageSize=20
+func (c *Client) SearchUsers(keyword string, pageNo int) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/search/user?keyword=%s&pageNo=%d&pageSize=20", keyword, pageNo))
+	return c.decodeResp(resp)
+}
+
+// SearchTopics searches for topics by keyword.
+// POST /v2/community/homepage/search/topic {"keyword":keyword,"pageSize":20,"pageNo":pageNo}
+func (c *Client) SearchTopics(keyword string, pageNo int) []byte {
+	params := struct {
+		Keyword  string `json:"keyword"`
+		PageSize int    `json:"pageSize"`
+		PageNo   int    `json:"pageNo"`
+	}{Keyword: keyword, PageSize: 20, PageNo: pageNo}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/homepage/search/topic", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
+// SearchRooms searches for voice rooms by keyword.
+// POST /v2/voiceroom/homePage/search/voiceroom {"keyword":keyword,"pageSize":20,"pageNo":pageNo}
+func (c *Client) SearchRooms(keyword string, pageNo int) []byte {
+	params := struct {
+		Keyword  string `json:"keyword"`
+		PageSize int    `json:"pageSize"`
+		PageNo   int    `json:"pageNo"`
+	}{Keyword: keyword, PageSize: 20, PageNo: pageNo}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("voiceroom/homePage/search/voiceroom", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
+// SearchDailies searches for dynamic posts by keyword.
+// POST /v2/community/dailies/searchByKeyword {"pageNo":pageNo,"tab":0,"pageSize":10,"keyword":keyword}
+func (c *Client) SearchDailies(keyword string, pageNo int) []byte {
+	params := struct {
+		PageNo   int    `json:"pageNo"`
+		Tab      int    `json:"tab"`
+		PageSize int    `json:"pageSize"`
+		Keyword  string `json:"keyword"`
+	}{PageNo: pageNo, Tab: 0, PageSize: 10, Keyword: keyword}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/dailies/searchByKeyword", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
 func (c *Client) GetUser(id string) User {
 	// build request payload (mirrors the Dart structure)
 	params := struct {
