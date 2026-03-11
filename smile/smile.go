@@ -742,6 +742,65 @@ func (c *Client) SearchDailies(keyword string, pageNo int) []byte {
 	return c.decodeResp(resp)
 }
 
+// PostDaily publishes a daily post with the given text content.
+// POST /v2/community/dailies {"content":content,"photos":[],"type":0}
+func (c *Client) PostDaily(content string) []byte {
+	params := struct {
+		Content string        `json:"content"`
+		Photos  []interface{} `json:"photos"`
+		Type    int           `json:"type"`
+	}{Content: content, Photos: []interface{}{}, Type: 0}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/dailies", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
+// RemoveDaily removes a daily post by its ID.
+// POST /v2/community/dailies/remove {"ids":[id]}
+func (c *Client) RemoveDaily(id string) []byte {
+	params := struct {
+		IDs []string `json:"ids"`
+	}{IDs: []string{id}}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/dailies/remove", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
+// SendMessage sends a private message to toUID.
+// The msgData field is AES-encrypted+Base64-encoded text; the whole payload is then
+// AES-encrypted+Base64-encoded as usual.
+// POST /v2/community/chat/message/sendmessage
+func (c *Client) SendMessage(toUID string, text string) []byte {
+	uid, _ := strconv.ParseInt(toUID, 10, 64)
+	clientID := time.Now().UnixMilli()
+
+	// encrypt msgData
+	msgCrypted := saes.AESEncrypt(c.aesb, []byte(text))
+	msgData := base64.StdEncoding.EncodeToString(msgCrypted)
+
+	params := struct {
+		SessionType    int    `json:"sessionType"`
+		ToUID          int64  `json:"toUid"`
+		SessionID      int64  `json:"sessionId"`
+		ClientID       int64  `json:"clientId"`
+		MsgContentType int    `json:"msgContentType"`
+		MsgData        string `json:"msgData"`
+	}{
+		SessionType:    1,
+		ToUID:          uid,
+		SessionID:      0,
+		ClientID:       clientID,
+		MsgContentType: 1,
+		MsgData:        msgData,
+	}
+	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
+	encoded := base64.StdEncoding.EncodeToString(crypted)
+	resp := c.httpPost("community/chat/message/sendmessage", []byte(encoded))
+	return c.decodeResp(resp)
+}
+
 func (c *Client) GetUser(id string) User {
 	// build request payload (mirrors the Dart structure)
 	params := struct {

@@ -517,7 +517,7 @@ func getFeedCommand() {
 }
 
 func inboxCommand() {
-	sm := smile.NewWebClient()
+	sm := smile.NewAPIClient()
 	plain := sm.GetInbox()
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -530,7 +530,7 @@ func cpCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewWebClient()
+	sm := smile.NewAPIClient()
 	plain := sm.GetCPInfo(args.UID)
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
@@ -549,8 +549,48 @@ func followsCommand() {
 		followType = 2
 	}
 
-	sm := smile.NewWebClient()
+	sm := smile.NewAPIClient()
 	plain := sm.GetFollows(args.UID, followType)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func postCommand() {
+	args := struct {
+		Content []string `cortana:"content, -, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	plain := sm.PostDaily(strings.Join(args.Content, " "))
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func rmDailyCommand() {
+	args := struct {
+		ID string `cortana:"id, -, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	plain := sm.RemoveDaily(args.ID)
+	var buf bytes.Buffer
+	json.Indent(&buf, plain, "", "  ")
+	fmt.Println(buf.String())
+}
+
+func msgCommand() {
+	args := struct {
+		ToUID string `cortana:"toUid, -, -"`
+		Text  []string `cortana:"text, -, -"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewAPIClient()
+	plain := sm.SendMessage(args.ToUID, strings.Join(args.Text, " "))
 	var buf bytes.Buffer
 	json.Indent(&buf, plain, "", "  ")
 	fmt.Println(buf.String())
@@ -581,5 +621,8 @@ func main() {
 	cortana.AddCommand("inbox", inboxCommand, "获取最新聊天会话列表")
 	cortana.AddCommand("cp", cpCommand, "获取亲密CP信息")
 	cortana.AddCommand("follows", followsCommand, "获取关注列表 (--fans 切换为粉丝列表)")
+	cortana.AddCommand("post", postCommand, "发布日常动态")
+	cortana.AddCommand("rmdaily", rmDailyCommand, "删除日常动态")
+	cortana.AddCommand("msg", msgCommand, "发送私信消息")
 	cortana.Launch()
 }
