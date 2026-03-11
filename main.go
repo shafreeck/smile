@@ -104,7 +104,7 @@ func smileSearchCommand() {
 	}{}
 	cortana.Parse(&args)
 
-	sm := smile.NewAPIClient()
+	sm := smile.NewWebClient()
 	results := make(map[string]interface{})
 
 	addResult := func(key string, plain []byte) {
