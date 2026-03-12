@@ -616,6 +616,33 @@ func msgRecvCommand() {
 		startTime = time.Now().Add(-dur).UnixMilli()
 	}
 	plain := sm.GetMessages(startTime)
+
+	// Decrypt the msgData field (double-encrypted) in each message before printing.
+	var resp map[string]interface{}
+	if err := json.Unmarshal(plain, &resp); err == nil {
+		if dataVal, ok := resp["data"].(map[string]interface{}); ok {
+			if msgs, ok := dataVal["msg_list"].([]interface{}); ok {
+				b, err := aes.NewCipher(saes.AESKey)
+				if err == nil {
+					for _, item := range msgs {
+						if m, ok := item.(map[string]interface{}); ok {
+							if msgData, ok := m["msg_data"].(string); ok {
+								if decoded, err := base64.StdEncoding.DecodeString(msgData); err == nil {
+									m["msg_data"] = string(saes.AESDecrypt(b, decoded))
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	out, err := json.MarshalIndent(resp, "", "  ")
+	if err == nil {
+		fmt.Println(string(out))
+		return
+	}
+
 	var buf bytes.Buffer
 	if err := json.Indent(&buf, plain, "", "  "); err != nil {
 		fmt.Println(string(plain))
