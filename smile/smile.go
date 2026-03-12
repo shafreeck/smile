@@ -601,7 +601,10 @@ func (c *Client) GetFeedHot(since time.Duration, limit int) []byte {
 	if err != nil {
 		return plain
 	}
-	cutoff := time.Now().Add(-since).UnixMilli()
+	var cutoff int64
+	if since != 0 {
+		cutoff = time.Now().Add(-since).UnixMilli()
+	}
 	result, _ := filterItems(arr, cutoff, nil, limit)
 	if result == nil {
 		result = []interface{}{}
@@ -613,7 +616,10 @@ func (c *Client) GetFeedHot(since time.Duration, limit int) []byte {
 // GetFeedByUser returns the feed for a specific user filtered by since/limit.
 // GET /v2/community/dailies/users/{uid}?pageNo={n}
 func (c *Client) GetFeedByUser(uid string, since time.Duration, limit int) []byte {
-	cutoff := time.Now().Add(-since).UnixMilli()
+	var cutoff int64
+	if since != 0 {
+		cutoff = time.Now().Add(-since).UnixMilli()
+	}
 	var result []interface{}
 	for pageNo := 1; ; pageNo++ {
 		resp := c.httpGet(fmt.Sprintf("community/dailies/users/%s?pageNo=%d", uid, pageNo))
@@ -638,7 +644,10 @@ func (c *Client) GetFeedByUser(uid string, since time.Duration, limit int) []byt
 // GetFeedByTab returns the feed for a specific tab filtered by since/limit.
 // GET /v2/community/dailies/queryByTab?tabId={tabID}&pageNo={n}
 func (c *Client) GetFeedByTab(tabID string, since time.Duration, limit int) []byte {
-	cutoff := time.Now().Add(-since).UnixMilli()
+	var cutoff int64
+	if since != 0 {
+		cutoff = time.Now().Add(-since).UnixMilli()
+	}
 	var result []interface{}
 	for pageNo := 0; ; pageNo++ {
 		resp := c.httpGet(fmt.Sprintf("community/dailies/queryByTab?tabId=%s&pageNo=%d", tabID, pageNo))

@@ -479,7 +479,7 @@ func getFeedCommand() {
 		Hot   bool   `cortana:"--hot"`
 		UID   string `cortana:"--uid"`
 		Tab   string `cortana:"--tab, -, , 发现|最新|找搭子|日常|游戏|萌新"`
-		Since string `cortana:"--since, -, 48h, 时间范围(支持h/d/w/y, 如3d, 1y)"`
+		Since string `cortana:"--since, -, 0, 时间范围(支持h/d/w/y, 如3d, 1y; 0表示不过滤)"`
 		Limit int    `cortana:"--limit, -, 50"`
 	}{}
 	cortana.Parse(&args)
