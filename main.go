@@ -585,7 +585,7 @@ func rmDailyCommand() {
 	fmt.Println(buf.String())
 }
 
-func msgCommand() {
+func msgSendCommand() {
 	args := struct {
 		ToUID string `cortana:"toUid, -, -"`
 		Text  []string `cortana:"text, -, -"`
@@ -595,6 +595,27 @@ func msgCommand() {
 	sm := smile.NewWebClient()
 	plain := sm.SendMessage(args.ToUID, strings.Join(args.Text, " "))
 	// try to parse as JSON, if fails just print raw
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, plain, "", "  "); err != nil {
+		fmt.Println(string(plain))
+		return
+	}
+	fmt.Println(buf.String())
+}
+
+func msgRecvCommand() {
+	args := struct {
+		Since string `cortana:"--since, -s, 1h, 时间范围(支持h/d/w/y, 如3d, 1h; 0表示不过滤)"`
+	}{}
+	cortana.Parse(&args)
+
+	sm := smile.NewWebClient()
+	var startTime int64
+	if args.Since != "0" && args.Since != "" {
+		dur := parseDuration(args.Since)
+		startTime = time.Now().Add(-dur).UnixMilli()
+	}
+	plain := sm.GetMessages(startTime)
 	var buf bytes.Buffer
 	if err := json.Indent(&buf, plain, "", "  "); err != nil {
 		fmt.Println(string(plain))
@@ -630,6 +651,7 @@ func main() {
 	cortana.AddCommand("follows", followsCommand, "获取关注列表 (--fans 切换为粉丝列表)")
 	cortana.AddCommand("post", postCommand, "发布日常动态")
 	cortana.AddCommand("rmdaily", rmDailyCommand, "删除日常动态")
-	cortana.AddCommand("msg", msgCommand, "发送私信消息")
+	cortana.AddCommand("msg send", msgSendCommand, "发送私信消息")
+	cortana.AddCommand("msg recv", msgRecvCommand, "接收最新私信消息")
 	cortana.Launch()
 }

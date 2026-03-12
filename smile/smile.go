@@ -676,6 +676,13 @@ func (c *Client) GetInbox() []byte {
 	return c.decodeResp(resp)
 }
 
+// GetMessages returns the latest chat messages since a given timestamp.
+// GET /v2/community/chat/getlatestmessage?pageNo=1&pageSize=200&startTime={timestamp}
+func (c *Client) GetMessages(startTime int64) []byte {
+	resp := c.httpGet(fmt.Sprintf("community/chat/getlatestmessage?pageNo=1&pageSize=200&startTime=%d", startTime))
+	return c.decodeResp(resp)
+}
+
 // GetCPInfo returns intimate CP info for the given target UID.
 // POST /v2/community/intimate/queryCpIntimateFriendInfo {"id":uid}
 func (c *Client) GetCPInfo(targetUID string) []byte {
