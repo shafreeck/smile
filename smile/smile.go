@@ -174,7 +174,7 @@ func (c *Client) SendSMSCode(phone string) {
 	rawPayload := unwrap.Err(json.Marshal(req))
 	crypted := saes.AESEncrypt(c.aesb, rawPayload)
 	encoded := base64.StdEncoding.EncodeToString(crypted)
-	
+
 	resp := c.httpPost(c.smsPath(), []byte(encoded))
 	defer resp.Body.Close()
 
@@ -672,7 +672,7 @@ func (c *Client) GetFeedByTab(tabID string, since time.Duration, limit int) []by
 // GetInbox returns the latest chat sessions.
 // GET /v2/community/chat/getlatestsession?pageNo=1&pageSize=100&updateTime=0
 func (c *Client) GetInbox() []byte {
-	resp := c.httpGet("community/chat/getlatestsession?pageNo=1&pageSize=100&updateTime=0")
+	resp := c.httpGet("community/chat/getlatestsession?pageNo=1&pageSize=5000&updateTime=0")
 	return c.decodeResp(resp)
 }
 
@@ -693,7 +693,6 @@ func (c *Client) GetCPInfo(targetUID string) []byte {
 	resp := c.httpPost("community/intimate/queryCpIntimateFriendInfo", []byte(encoded))
 	return c.decodeResp(resp)
 }
-
 
 // GetFollows returns the follow/follower list for the given user.
 // followType=1 for following, followType=2 for followers.
@@ -796,41 +795,32 @@ func (c *Client) GetOrCreateSession(targetUID string) []byte {
 // The msgData field is AES-encrypted+Base64-encoded text; the whole payload is then
 // AES-encrypted+Base64-encoded as usual.
 // POST /v2/community/chat/message/sendmessage
-func (c *Client) SendMessage(toUID string, text string) []byte {
+func (c *Client) SendMessage(toUID string, text string, sessionID int64) []byte {
 	uid, _ := strconv.ParseInt(toUID, 10, 64)
-	clientID := time.Now().UnixMilli()
+	clientID := time.Now().UnixNano() / 1000
 
-	// First, try to get sessionId from inbox
-	sessionID := int64(0)
-	inboxResp := c.GetInbox()
-	var inbox struct {
-		Data struct {
-			SessionList []struct {
-				EntityID int64 `json:"entity_id"`
-				SessionID int64 `json:"session_id"`
-			} `json:"session_info_list"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(inboxResp, &inbox); err == nil {
-		for _, s := range inbox.Data.SessionList {
-			if s.EntityID == uid {
-				sessionID = s.SessionID
-				break
+	if sessionID == 0 {
+		// Try to get sessionId from inbox
+		inboxResp := c.GetInbox()
+		var inbox struct {
+			Data struct {
+				SessionList []struct {
+					EntityID  int64 `json:"entity_id"`
+					SessionID int64 `json:"session_id"`
+				} `json:"session_info_list"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(inboxResp, &inbox); err == nil {
+			for _, s := range inbox.Data.SessionList {
+				if s.EntityID == uid {
+					sessionID = s.SessionID
+					break
+				}
 			}
 		}
 	}
-
-	// If no session found in inbox, try to get/create one via querychatbar
 	if sessionID == 0 {
-		sessionResp := c.GetOrCreateSession(toUID)
-		var scr struct {
-			Data struct {
-				SessionID int64 `json:"session_id"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(sessionResp, &scr); err == nil {
-			sessionID = scr.Data.SessionID
-		}
+		log.Fatalln("no session found")
 	}
 
 	// encrypt msgData
@@ -838,27 +828,27 @@ func (c *Client) SendMessage(toUID string, text string) []byte {
 	msgData := base64.StdEncoding.EncodeToString(msgCrypted)
 
 	params := struct {
-		SessionType    int    `json:"sessionType"`
-		ToUID          int64  `json:"toUid"`
-		SessionID      int64  `json:"sessionId"`
-		ClientID       int64  `json:"clientId"`
-		ReferUserIDList []int `json:"referUserIdList"`
-		MsgData        string `json:"msgData"`
-		ExtData        string `json:"extData"`
-		MsgContentType int    `json:"msgContentType"`
-		OtherMsgType   int    `json:"otherMsgType"`
-		ReplyMsgID     int64  `json:"replyMsgId"`
+		SessionType     int    `json:"sessionType"`
+		ToUID           int64  `json:"toUid"`
+		SessionID       int64  `json:"sessionId"`
+		ClientID        int64  `json:"clientId"`
+		ReferUserIDList []int  `json:"referUserIdList"`
+		MsgData         string `json:"msgData"`
+		ExtData         string `json:"extData"`
+		MsgContentType  int    `json:"msgContentType"`
+		OtherMsgType    int    `json:"otherMsgType"`
+		ReplyMsgID      int64  `json:"replyMsgId"`
 	}{
-		SessionType:    1,
-		ToUID:          uid,
-		SessionID:      sessionID,
-		ClientID:       clientID,
+		SessionType:     1,
+		ToUID:           uid,
+		SessionID:       sessionID,
+		ClientID:        clientID,
 		ReferUserIDList: []int{},
-		MsgData:        msgData,
-		ExtData:        "",
-		MsgContentType: 1,
-		OtherMsgType:   0,
-		ReplyMsgID:     0,
+		MsgData:         msgData,
+		ExtData:         "",
+		MsgContentType:  1,
+		OtherMsgType:    0,
+		ReplyMsgID:      0,
 	}
 	crypted := saes.AESEncrypt(c.aesb, unwrap.Err(json.Marshal(params)))
 	encoded := base64.StdEncoding.EncodeToString(crypted)

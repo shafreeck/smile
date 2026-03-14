@@ -587,13 +587,13 @@ func rmDailyCommand() {
 
 func msgSendCommand() {
 	args := struct {
-		ToUID string `cortana:"toUid, -, -"`
+		ToUID string   `cortana:"toUid, -, -"`
 		Text  []string `cortana:"text, -, -"`
 	}{}
 	cortana.Parse(&args)
 
 	sm := smile.NewWebClient()
-	plain := sm.SendMessage(args.ToUID, strings.Join(args.Text, " "))
+	plain := sm.SendMessage(args.ToUID, strings.Join(args.Text, " "), 0)
 	// try to parse as JSON, if fails just print raw
 	var buf bytes.Buffer
 	if err := json.Indent(&buf, plain, "", "  "); err != nil {
